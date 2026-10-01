@@ -145,6 +145,8 @@ case_choice_build_mcpp() {
         --entry tool:mcpp.deps.cmake:cmake --class program --origin-kind build-program --origin-line "$line" \
         || fail "resolution.json does not say that the payload was not requested and the program chose the tool"
 
+    check ran-cmake --same-as "$CMAKE" || fail "the cmake that configured the subproject is not the one the build program named"
+
     mcpp_run MCPP_NO_AUTO_INSTALL=1 -- run
     [ "$rc" -eq 0 ] && contains "$out" "greet says 42" || fail "the library the named cmake built does not run"
     pass
@@ -170,6 +172,8 @@ override_checks() {
         check record --entry payload:xim:cmake --class custom --origin-kind "$kind" \
             || fail "resolution.json does not record class custom from $kind"
     fi
+    check ran-cmake --same-as "$CMAKE" || fail "the cmake that configured the subproject is not the one the override states"
+
     mcpp_run MCPP_NO_AUTO_INSTALL=1 "$@" -- run
     [ "$rc" -eq 0 ] && contains "$out" "greet says 42" || fail "the library the overriding cmake built does not run"
 }
@@ -292,6 +296,9 @@ case_default() {
     done
     check record --only-classes managed,pinned \
         || fail "resolution.json holds a source that is not managed or pinned, or holds none"
+
+    check ran-cmake --under "$MCPP_HOME/registry/data/xpkgs/xim-x-cmake" \
+        || fail "the cmake that configured the subproject is not the xim:cmake payload"
 
     mcpp_run -- run
     [ "$rc" -eq 0 ] && contains "$out" "greet says 42" || fail "the default build's program does not run"
