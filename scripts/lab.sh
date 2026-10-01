@@ -21,12 +21,12 @@
 # succeeds did not ask for it. That holds only while the payload is not already
 # installed, so the `control` case first shows that a build stating nothing is
 # refused for want of xim:cmake on this runner. The workflow saves the cached
-# MCPP_HOME before any case runs and runs `default` last, so a payload that
-# `default` installs reaches no other case and no later run.
+# MCPP_HOME before any case runs and runs `timing` and `default` last, so a
+# payload that either installs reaches no other case and no later run.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-CASES="control choice-build-mcpp override-env override-manifest override-from-dependency override-bare-name managed-only why default"
+CASES="control choice-build-mcpp override-env override-manifest override-from-dependency override-bare-name managed-only why timing default"
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
@@ -337,8 +337,89 @@ case_why() {
     pass
 }
 
+# How much a build saves by naming the host's cmake instead of installing the
+# xim:cmake payload. Three whole `mcpp build`s, each from a clean state (the
+# project's target/ removed):
+#
+#   named before   the build program names the host cmake
+#   control        nothing names cmake, so the member asks for the payload
+#   named after    the named build again
+#
+# The named build runs on both sides of the control so that the order of the
+# builds is visible in the numbers instead of hiding in them. This case runs
+# after every case that needs the payload to be absent, and before `default`.
+#
+# THE MEASUREMENT IS COLD OR IT IS LABELLED WARM. It is cold when the payload
+# was not installed before the control and the control's own output has the
+# `Downloading xim:cmake` line. A control that downloaded nothing is reported as
+# warm, with the reason, and is not a measurement of the download.
+now() {
+    local py; py=$(python_cmd) || { echo 0; return; }
+    "$py" -c 'import time; print("%.3f" % time.time())'
+}
+elapsed() { awk -v a="$2" -v b="$1" 'BEGIN { printf "%.1f", a - b }'; }
+
+case_timing() {
+    need_cmake
+    stage timing
+    local store="$MCPP_HOME/registry/data/xpkgs/xim-x-cmake"
+    local before="cold"
+    if [ -n "$(ls "$store" 2> /dev/null | head -1)" ]; then before="warm: xim:cmake was installed before the control ran"; fi
+    echo "READING payload store before the control: $(ls -d "$store"/* 2> /dev/null || echo 'xim-x-cmake is not installed')"
+    echo "READING host cmake: $("$CMAKE" --version | head -1)"
+    echo "READING runner image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+
+    local named_dir="$P/choice-build-mcpp" control_dir="$P/default"
+    local t0 t1 named_before control named_after
+
+    cd "$named_dir"; rm -rf target
+    echo "== named, before the control"
+    t0=$(now); mcpp_run -- build; t1=$(now); named_before=$(elapsed "$t0" "$t1")
+    [ "$rc" -eq 0 ] || fail "the build that names the host cmake did not succeed"
+    contains "$out" "Downloading xim:" && fail "the build that names the host cmake downloaded a payload"
+    contains "$(using_lines)" "Using cmake (mcpp.deps.cmake)" || fail "the named build reports no Using line for cmake"
+
+    cd "$control_dir"; rm -rf target
+    echo "== control: nothing names cmake"
+    t0=$(now); mcpp_run -- build; t1=$(now); control=$(elapsed "$t0" "$t1")
+    [ "$rc" -eq 0 ] || fail "the control build did not succeed"
+    [ -z "$(using_lines)" ] || fail "the control build printed a Using line: $(using_lines)"
+    printf '%s\n' "$out" > "$LAB_WORK/run/timing/control.out"
+    local dl; dl=$(check downloads "$(native "$LAB_WORK/run/timing/control.out")")
+    echo "$dl"
+    local n all_mb all_s cmake_version cmake_mb cmake_s
+    n=$(printf '%s\n' "$dl" | sed -n 's/^n=//p')
+    all_mb=$(printf '%s\n' "$dl" | sed -n 's/^all_mb=//p')
+    all_s=$(printf '%s\n' "$dl" | sed -n 's/^all_s=//p')
+    cmake_version=$(printf '%s\n' "$dl" | sed -n 's/^cmake_version=//p')
+    cmake_mb=$(printf '%s\n' "$dl" | sed -n 's/^cmake_mb=//p')
+    cmake_s=$(printf '%s\n' "$dl" | sed -n 's/^cmake_s=//p')
+    if [ -z "$cmake_version" ]; then
+        if [ "$before" = "cold" ]; then before="warm: the control's output has no Downloading xim:cmake line"; fi
+    fi
+    local installed_mb; installed_mb=$(du -sk "$store" 2> /dev/null | awk '{ printf "%.0f", $1 / 1024 }' || true)
+
+    cd "$named_dir"; rm -rf target
+    echo "== named, after the control"
+    t0=$(now); mcpp_run -- build; t1=$(now); named_after=$(elapsed "$t0" "$t1")
+    [ "$rc" -eq 0 ] || fail "the second build that names the host cmake did not succeed"
+    contains "$out" "Downloading xim:" && fail "the second build that names the host cmake downloaded a payload"
+
+    local named; named=$(awk -v a="$named_before" -v b="$named_after" 'BEGIN { printf "%.1f", (a + b) / 2 }')
+    local saved; saved=$(awk -v c="$control" -v n="$named" 'BEGIN { printf "%.1f", c - n }')
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "${LAB_PLATFORM:-$(uname -s)}" "${ImageOS:-unknown} ${ImageVersion:-unknown}" \
+        "$("$CMAKE" --version | head -1 | sed 's/cmake version //')" "${cmake_version:-none}" "$before" \
+        "$control" "$named_before" "$named_after" "$saved" \
+        "${cmake_mb:-0}" "${cmake_s:-0}" "$all_mb" "$all_s" "${installed_mb:-0}" > "$LAB_RESULTS/timing.tsv"
+    echo "TIMING state: $before"
+    echo "TIMING control ${control}s; named ${named_before}s before and ${named_after}s after (mean ${named}s); the control took ${saved}s longer"
+    echo "TIMING xim:cmake download: ${cmake_mb:-none} MB in ${cmake_s:-none}s; all $n payloads of the control: ${all_mb} MB in ${all_s}s; installed size ${installed_mb:-?} MB"
+    pass
+}
+
 # Nothing is stated: every source is the ecosystem's, and xim:cmake is installed
-# on request. This is the only case that downloads cmake, so it runs last.
+# on request. `timing` also installs the payload, so both run last.
 case_default() {
     stage default
     cd "$P/default"
@@ -394,6 +475,13 @@ summary() {
             echo "| $c | $r |"
         done
     } > "$md"
+    if [ -f "$LAB_RESULTS/timing.tsv" ]; then
+        awk -F'\t' '{
+            print ""
+            print "Timing (" $5 "): control " $6 " s, named " $7 " s before and " $8 " s after, difference " $9 " s;"
+            print "xim:cmake " $4 ", " $10 " MB downloaded in " $11 " s, " $14 " MB installed."
+        }' "$LAB_RESULTS/timing.tsv" >> "$md"
+    fi
     cat "$md"
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat "$md" >> "$GITHUB_STEP_SUMMARY"; fi
 }
@@ -407,7 +495,7 @@ case "$cmd" in
         : "${MCPP:?the engine under test}"
         : "${MCPP_HOME:?the sandbox the engine uses}"
         ( warmup ) 2>&1 | tee "$LAB_RESULTS/warmup.log"; exit "${PIPESTATUS[0]}" ;;
-    control|choice-build-mcpp|override-env|override-manifest|override-from-dependency|override-bare-name|managed-only|why|default)
+    control|choice-build-mcpp|override-env|override-manifest|override-from-dependency|override-bare-name|managed-only|why|timing|default)
         : "${MCPP:?the engine under test}"
         : "${MCPP_HOME:?the sandbox the engine uses}"
         CASE=$cmd

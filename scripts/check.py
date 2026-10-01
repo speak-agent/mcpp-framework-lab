@@ -4,6 +4,7 @@
     check.py record [--only-classes managed,pinned] [--entry SUBJECT ...]
     check.py why FILE [--entry SUBJECT ...]
     check.py ran-cmake (--same-as PATH | --under DIR)
+    check.py downloads FILE
 
 `record` reads the newest target/*/*/resolution.json under the current
 directory. `why` reads the JSON that `mcpp why sources --format json` printed
@@ -15,6 +16,11 @@ follow it (--class, --origin-kind, --origin-line, --origin-key, --considered)
 are the assertions about that entry (--value-basename NAME says that the value is
 an absolute path whose last component is NAME). The script prints every entry it read and
 exits 1 with the first assertion that does not hold.
+
+`downloads` reads a build's output and prints, as key=value pairs, what the
+`Downloading xim:<name>@<version> done, <size> in <seconds>s` lines add up to:
+`n` payloads and `all_mb` and `all_s` for all of them, and `cmake_version`,
+`cmake_mb` and `cmake_s` for the xim:cmake line (empty when it has none).
 
 `ran-cmake` asks the cmake that configured the subproject which cmake it was:
 every CMakeCache.txt under target/ records its own `CMAKE_COMMAND`. At least one
@@ -74,6 +80,33 @@ def load_why(path):
     if data.get("status") != "ok":
         fail("data.status is %r (reason %r), not 'ok'" % (data.get("status"), data.get("reason")))
     return path, data.get("sources", [])
+
+
+def downloads(argv):
+    import re
+    if len(argv) != 1:
+        fail("downloads takes one file")
+    with open(argv[0], encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    unit = {"B": 1.0 / 1048576, "KB": 1.0 / 1024, "MB": 1.0, "GB": 1024.0}
+    pattern = re.compile(r"Downloading xim:(\S+?)@(\S+) done, ([0-9.]+) ([KMG]?B) in ([0-9.]+)s")
+    n = 0
+    all_mb = all_s = 0.0
+    cmake = None
+    for m in pattern.finditer(text):
+        name, version, size, u, secs = m.groups()
+        mb = float(size) * unit[u]
+        n += 1
+        all_mb += mb
+        all_s += float(secs)
+        if name == "cmake":
+            cmake = (version, mb, float(secs))
+    print("n=%d" % n)
+    print("all_mb=%.1f" % all_mb)
+    print("all_s=%.1f" % all_s)
+    print("cmake_version=%s" % (cmake[0] if cmake else ""))
+    print("cmake_mb=%s" % ("%.1f" % cmake[1] if cmake else ""))
+    print("cmake_s=%s" % ("%.1f" % cmake[2] if cmake else ""))
 
 
 def ran_cmake(argv):
@@ -143,6 +176,9 @@ def main():
     argv = sys.argv[1:]
     if argv and argv[0] == "ran-cmake":
         ran_cmake(argv[1:])
+        return
+    if argv and argv[0] == "downloads":
+        downloads(argv[1:])
         return
     if not argv or argv[0] not in ("record", "why"):
         fail("usage: check.py record|why|ran-cmake ...; see the header of this file")

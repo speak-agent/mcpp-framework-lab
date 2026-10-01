@@ -147,7 +147,13 @@ jobs:
         timeout-minutes: 30
         run: bash scripts/lab.sh why
 
-      # Last: the only case that installs the cmake payload.
+      # The last two cases install the cmake payload, so they come after every
+      # case that needs it to be absent.
+      - name: "case: timing"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 60
+        run: bash scripts/lab.sh timing
+
       - name: "case: default"
         if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
         timeout-minutes: 60
