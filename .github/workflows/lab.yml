@@ -132,6 +132,11 @@ jobs:
         timeout-minutes: 30
         run: bash scripts/lab.sh override-from-dependency
 
+      - name: "case: override-bare-name"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh override-bare-name
+
       - name: "case: managed-only"
         if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
         timeout-minutes: 30

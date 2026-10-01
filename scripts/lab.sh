@@ -26,7 +26,7 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-CASES="control choice-build-mcpp override-env override-manifest override-from-dependency managed-only why default"
+CASES="control choice-build-mcpp override-env override-manifest override-from-dependency override-bare-name managed-only why default"
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
@@ -211,6 +211,62 @@ case_override_from_dependency() {
     pass
 }
 
+# A bare name that is also a shell builtin. `command -v true` prints `true`, not
+# a path, because the shell answers with what it would run. An override that
+# names such a program by its bare name must still be found on PATH. Only
+# the resolution is asserted, through `mcpp why`: nothing here builds, and a
+# `true` that stands in for cmake would configure nothing.
+case_override_bare_name() {
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) skip "a shell builtin is a POSIX notion: the engine finds a name with \`where\` on Windows, which reports programs only" ;;
+    esac
+    if [ ! -x /usr/bin/true ] && [ ! -x /bin/true ]; then skip "this host has no \`true\` program to find"; fi
+    need_cmake
+    stage override-bare-name
+    local json="$LAB_WORK/run/override-bare-name/sources.json" err="$LAB_WORK/run/override-bare-name/sources.err"
+    echo "READING the shell answers: $(sh -c 'command -v true')"
+
+    # the manifest says `{ program = "true" }`
+    cd "$P/override-manifest"
+    sed -e 's|^"xim:cmake" *=.*|"xim:cmake" = { program = "true" }|' mcpp.toml > mcpp.toml.new
+    mv mcpp.toml.new mcpp.toml
+    local line; line=$(line_of '^"xim:cmake" *=' mcpp.toml)
+    [ -n "$line" ] || fail "the manifest does not state xim:cmake"
+    mcpp_run MCPP_NO_AUTO_INSTALL=1 -- why payload cmake
+    [ "$rc" -eq 0 ] || fail "an override naming the bare word true was refused"
+    contains "$out" "is not found on PATH" && fail "the refusal says true is not found on PATH although this host has /usr/bin/true"
+    local u; u=$(printf '%s\n' "$out" | grep -E 'Using xim:cmake' || true)
+    [ -n "$u" ] || fail "no 'Using xim:cmake' line"
+    case "$u" in
+        *"/true  [host · mcpp.toml:$line]"*) ;;
+        *) fail "the Using line does not name a path ending in /true with the tag [host · mcpp.toml:$line]: $u" ;;
+    esac
+    echo "+ mcpp why sources --format json"
+    set +e
+    MCPP_NO_AUTO_INSTALL=1 NO_COLOR=1 "$MCPP" why sources --format json > "$json" 2> "$err"
+    rc=$?
+    set -e
+    echo "+ exit status $rc; standard error:"; cat "$err"
+    [ "$rc" -eq 0 ] || fail "mcpp why sources --format json failed for a bare-name override"
+    check why "$(native "$json")" \
+        --entry payload:xim:cmake --class host --origin-kind manifest --origin-line "$line" --value-basename true \
+        || fail "the JSON of why sources does not report a host program named true"
+
+    # the environment says `path:true`
+    cd "$P/override-env"
+    echo "+ mcpp why sources --format json (MCPP_XLINGS_OVERRIDE_XIM_CMAKE=path:true)"
+    set +e
+    MCPP_NO_AUTO_INSTALL=1 MCPP_XLINGS_OVERRIDE_XIM_CMAKE=path:true NO_COLOR=1 "$MCPP" why sources --format json > "$json" 2> "$err"
+    rc=$?
+    set -e
+    echo "+ exit status $rc; standard error:"; cat "$err"
+    [ "$rc" -eq 0 ] || fail "mcpp why sources --format json failed for MCPP_XLINGS_OVERRIDE_XIM_CMAKE=path:true"
+    check why "$(native "$json")" \
+        --entry payload:xim:cmake --class host --origin-kind env --value-basename true \
+        || fail "the JSON of why sources does not report a host program named true for the environment override"
+    pass
+}
+
 case_managed_only() {
     need_cmake
     stage managed-only
@@ -351,7 +407,7 @@ case "$cmd" in
         : "${MCPP:?the engine under test}"
         : "${MCPP_HOME:?the sandbox the engine uses}"
         ( warmup ) 2>&1 | tee "$LAB_RESULTS/warmup.log"; exit "${PIPESTATUS[0]}" ;;
-    control|choice-build-mcpp|override-env|override-manifest|override-from-dependency|managed-only|why|default)
+    control|choice-build-mcpp|override-env|override-manifest|override-from-dependency|override-bare-name|managed-only|why|default)
         : "${MCPP:?the engine under test}"
         : "${MCPP_HOME:?the sandbox the engine uses}"
         CASE=$cmd

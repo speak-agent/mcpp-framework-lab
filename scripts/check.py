@@ -12,7 +12,8 @@ status `ok`.
 
 Each `--entry SUBJECT` selects one source by its subject, and the options that
 follow it (--class, --origin-kind, --origin-line, --origin-key, --considered)
-are the assertions about that entry. The script prints every entry it read and
+are the assertions about that entry (--value-basename NAME says that the value is
+an absolute path whose last component is NAME). The script prints every entry it read and
 exits 1 with the first assertion that does not hold.
 
 `ran-cmake` asks the cmake that configured the subproject which cmake it was:
@@ -167,7 +168,7 @@ def main():
             args.only_classes = rest[i + 1]
         elif opt == "--entry":
             wanted.append({"subject": rest[i + 1], "checks": []})
-        elif opt in ("--class", "--origin-kind", "--origin-line", "--origin-key", "--considered"):
+        elif opt in ("--class", "--origin-kind", "--origin-line", "--origin-key", "--considered", "--value-basename"):
             if not wanted:
                 fail("%s comes before any --entry" % opt)
             wanted[-1]["checks"].append((opt[2:], rest[i + 1]))
@@ -207,6 +208,14 @@ def main():
                 actual = str(o.get("line"))
             elif name == "origin-key":
                 actual = o.get("key")
+            elif name == "value-basename":
+                value = str(e.get("value"))
+                if not (os.path.isabs(value) or value.startswith("/") or (len(value) > 2 and value[1] == ":")):
+                    fail("%s: value %r is not an absolute path" % (w["subject"], value))
+                base = os.path.basename(value.replace("\\", "/"))
+                if base != expected:
+                    fail("%s: the value's last component is %r, not %r" % (w["subject"], base, expected))
+                continue
             elif name == "considered":
                 if not any(expected in c for c in e.get("considered", [])):
                     fail("%s: no `considered` line contains %r; they are %s"

@@ -12,7 +12,7 @@ import sys
 import tempfile
 
 CASES = ["control", "choice-build-mcpp", "override-env", "override-manifest",
-         "override-from-dependency", "managed-only", "why", "default"]
+         "override-from-dependency", "override-bare-name", "managed-only", "why", "default"]
 PLATFORMS = [("Linux", "ubuntu-24.04"), ("macOS", "macos-15"), ("Windows", "windows-2022")]
 
 
