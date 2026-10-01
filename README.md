@@ -51,6 +51,7 @@ the cmake that configured the subproject by reading `CMAKE_COMMAND` from its
 | `override-bare-name` | `override-manifest` and `override-env` | a program named by a bare word that the shell answers for itself: `{ program = "true" }` in the manifest, `path:true` in the environment | `mcpp why` is not refused with "not found on PATH"; the `Using` line names a path ending in `/true` tagged `[host · mcpp.toml:<line>]`; the JSON has class `host`, the right origin, and an absolute path whose last component is `true`. Skipped on Windows, where the engine asks `where`, which reports programs only |
 | `managed-only` | `override-env` | the environment override, with `--managed-only` and then `MCPP_MANAGED_ONLY=1` | both builds are refused and name `xim:cmake`; the same build without the flag succeeds |
 | `why` | `override-manifest`, then `override-env` | the manifest override, then the environment override | `why payload cmake` and `why tool cmake` report it; `why sources --format json` has kind `mcpp.why.sources`, status `ok`, the subject `payload:xim:cmake`, class `custom` and the right origin |
+| `timing` | `choice-build-mcpp` and `default` | the build program names the host cmake, or nothing names cmake | four whole `mcpp build`s, each from a clean `target/`: named, control, named again, and control with the payload installed. All four must succeed; the named builds download nothing and report the `Using` line; the control prints no `Using` line. The case reports seconds and sizes and labels the control cold or warm. See the timing section below |
 | `default` | `default` | nothing | the output has no `Using` line and no `· custom:`, `· program:` or `· host:` on `Finished`; every class in `resolution.json` is `managed` or `pinned`; the payload `xim:cmake` configured the subproject; `--managed-only` accepts the build |
 
 `projects/` holds placeholders that `scripts/lab.sh` replaces in the copy:
@@ -66,8 +67,8 @@ not already installed. Three things keep it true here:
 
 - The workflow saves the cached `MCPP_HOME` before any case runs, after a
   warm-up build that installs the toolchain but not the cmake payload.
-- The `default` case runs last, because it is the only one that installs
-  `xim:cmake`.
+- The `timing` and `default` cases run last, because they are the only ones that
+  install `xim:cmake`.
 - The `control` case shows, on every run and every platform, that a build which
   states nothing is refused for want of `xim:cmake`.
 
@@ -78,42 +79,48 @@ run no cmake.
 
 ## Results
 
-Pull request run [36884696419](https://github.com/speak-agent/mcpp-framework-lab/actions/runs/36884696419),
-which tested the engine at `7819a28c` (`mcpp-community/mcpp`, branch
-`feat/build-sources`, built with the released mcpp 2026.10.1.2) and the plugins
-at `5d92352b` (`mcpp-community/mcpp-plugins`, branch `feat/0.19.0-tool-sources`,
-version 0.19.0). The engine commit is later than `02df8c30`, which carries the
-response-file and `which()` changes.
+Pull request run [36888453587](https://github.com/speak-agent/mcpp-framework-lab/actions/runs/36888453587).
+The engine under test was `49abb10a` on all three platforms
+(`mcpp-community/mcpp`, branch `feat/build-sources`, built with the released
+mcpp 2026.10.1.2). That commit descends from `77b632fd`, and so from the
+response-file and `which()` changes. The plugins were at `e48c4814` on
+ubuntu-24.04 and windows-2022 and at `358841d3` on macos-15
+(`mcpp-community/mcpp-plugins`, branch `feat/0.19.0-tool-sources`, version
+0.19.0): the branch moved between the clones of the three jobs, because each job
+clones the reference when it starts.
 
 | Run | Platform | mcpp | Engine commit | Case | Conclusion |
 |---|---|---|---|---|---|
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | control | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | choice-build-mcpp | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | override-env | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | override-manifest | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | override-from-dependency | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | override-bare-name | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | managed-only | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | why | pass |
-| 36884696419 | ubuntu-24.04 | 2026.10.1.3 | 7819a28c | default | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | control | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | choice-build-mcpp | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | override-env | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | override-manifest | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | override-from-dependency | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | override-bare-name | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | managed-only | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | why | pass |
-| 36884696419 | macos-15 | 2026.10.1.3 | 7819a28c | default | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | control | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | choice-build-mcpp | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | override-env | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | override-manifest | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | override-from-dependency | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | override-bare-name | skip: a shell builtin is a POSIX notion: the engine finds a name with `where` on Windows, which reports programs only |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | managed-only | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | why | pass |
-| 36884696419 | windows-2022 | 2026.10.1.3 | 7819a28c | default | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | control | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | choice-build-mcpp | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | override-env | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | override-manifest | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | override-from-dependency | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | override-bare-name | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | managed-only | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | why | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | timing | pass |
+| 36888453587 | ubuntu-24.04 | 2026.10.1.3 | 49abb10a | default | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | control | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | choice-build-mcpp | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | override-env | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | override-manifest | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | override-from-dependency | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | override-bare-name | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | managed-only | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | why | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | timing | pass |
+| 36888453587 | macos-15 | 2026.10.1.3 | 49abb10a | default | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | control | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | choice-build-mcpp | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | override-env | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | override-manifest | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | override-from-dependency | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | override-bare-name | skip: a shell builtin is a POSIX notion: the engine finds a name with `where` on Windows, which reports programs only |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | managed-only | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | why | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | timing | pass |
+| 36888453587 | windows-2022 | 2026.10.1.3 | 49abb10a | default | pass |
 
 - No assertion failed, so the run records no finding against the feature.
 - One case was skipped. `override-bare-name` is skipped on Windows because a
@@ -130,6 +137,59 @@ response-file and `which()` changes.
   `mcpp.exe` as two binaries, because Git Bash opens `bin/mcpp` as
   `bin/mcpp.exe`. That is a defect of this repository and was fixed in the next
   commit. The engine built correctly in that run.
+
+## What naming the host's cmake saves
+
+The `timing` case builds the same small project four times on each runner, each
+time from a clean `target/` and each time as one whole `mcpp build`:
+
+1. named: the build program writes `o.cmake = "<host cmake>"`;
+2. control: nothing names cmake, so the member asks for the `xim:cmake` payload;
+3. named again;
+4. control again, now that the payload is installed.
+
+| Platform | Runner image | Control (s) | Named, before and after (s) | Difference (s) | xim:cmake payload |
+|---|---|---|---|---|---|
+| ubuntu-24.04 | ubuntu24 20260927.320.1 | 29.5 | 6.4 and 6.3 | 23.2 | 61.9 MB downloaded in 3.5 s, 207 MB installed |
+| macos-15 | macos15 20260907.0337.1 | 19.6 | 5.4 and 4.3 | 14.8 | 85.9 MB downloaded in 9.4 s, 265 MB installed |
+| windows-2022 | win22 20260927.320.1 | 20.0 | 5.8 and 5.7 | 14.2 | 51.9 MB downloaded in 10.0 s, 152 MB installed |
+
+The difference is the control minus the mean of the two named builds.
+Every measurement here is **cold**: on all three runners `xim:cmake` was not
+installed before the control ran (the case checks the payload store and the
+control's own `Downloading xim:cmake` line, and would label the row warm
+otherwise), the runner has a cmake to name, and the sandbox cache holds no
+cmake payload by construction.
+
+The full figures of the same run:
+
+| Platform | Runner image | Host cmake | Payload | State | Control (s) | Named before (s) | Named after (s) | Control minus named mean (s) | Control, payload installed (s) | Payload download (MB, s) | All payloads of the control (MB, s) | Installed (MB) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ubuntu-24.04 | ubuntu24 20260927.320.1 | 3.31.6 | xim:cmake 4.4.2 | cold | 29.5 | 6.4 | 6.3 | 23.2 | 6.4 | 61.9, 3.5 | 76.4, 7.6 | 207 |
+| macos-15 | macos15 20260907.0337.1 | 4.4.3 | xim:cmake 4.4.2 | cold | 19.6 | 5.4 | 4.3 | 14.8 | 5.0 | 85.9, 9.4 | 85.9, 9.4 | 265 |
+| windows-2022 | win22 20260927.320.1 | 3.31.6 | xim:cmake 4.4.2 | cold | 20.0 | 5.8 | 5.7 | 14.2 | 5.7 | 51.9, 10.0 | 51.9, 10.0 | 152 |
+
+- Naming the host's cmake saved between 14 and 23 seconds of a 20 to 30 second
+  build, and 207, 265 and 152 MB of installed payload, in this run.
+- The download is the smaller part of that. The payload downloaded in 3.5, 9.4
+  and 10.0 seconds, against savings of 23.2, 14.8 and 14.2 seconds. On Linux the
+  control also downloaded four other payloads in the same provisioning step
+  (freetype, libXau, fontconfig and libxcb; 76.4 MB in 7.6 seconds in all). The
+  rest of the saving is provisioning work that the build's log does not time
+  separately.
+- The control with the payload installed (build 4) took about as long as the
+  named builds: 6.4, 5.0 and 5.7 seconds against named builds of 6.4 and 6.3,
+  5.4 and 4.3, and 5.8 and 5.7. So the saving
+  is the cost of provisioning the payload: the control minus the control with
+  the payload installed is 23.1, 14.6 and 14.3 seconds. That cost is paid when
+  the payload is first installed into an `MCPP_HOME`, not on every build.
+- The numbers are one sample per platform on shared runners. The same three
+  platforms measured 21.2, 13.7 and 16.3 seconds of difference in run
+  36886888247, which ran the first three builds only, so the spread between runs
+  is about two seconds.
+- The host cmake on ubuntu-24.04 and windows-2022 is 3.31.6, on macos-15 it is
+  4.4.3, and the payload is 4.4.2 everywhere. The two sides of the comparison
+  therefore use different cmake versions on all three runners.
 
 ## Re-running
 
@@ -151,7 +211,7 @@ platform (`ubuntu-24.04`, `macos-15`, `windows-2022`). Each job:
    step. Every step writes `results/<case>.log` and `results/<case>.result`, and
    the job uploads them as the artifact `lab-results-<OS>`.
 
-To fill the results table from a run:
+To fill the results and timing tables from a run:
 
 ```
 python3 scripts/results-table.py <run-id> --repo speak-agent/mcpp-framework-lab
@@ -160,7 +220,8 @@ python3 scripts/results-table.py <run-id> --repo speak-agent/mcpp-framework-lab
 To run a case by hand, export `MCPP` (the engine) and `MCPP_HOME`, run
 `scripts/clone-plugins.sh` once, then `bash scripts/lab.sh <case>`. Set
 `MCPP_DEPS_CMAKE_CACHE=off`. On a machine whose `MCPP_HOME` already holds the
-`xim:cmake` payload the `control` case fails by design, and says so.
+`xim:cmake` payload the `control` case fails by design, and says so, and the
+`timing` case labels its control warm.
 
 ## Layout
 
@@ -171,5 +232,5 @@ To run a case by hand, export `MCPP` (the engine) and `MCPP_HOME`, run
 | `projects/` | the consumer projects, the CMake subproject `greet`, and the `override-plugin` package |
 | `scripts/install-mcpp.sh`, `clone-plugins.sh`, `build-engine.sh` | the steps before the cases |
 | `scripts/lab.sh` | the cases, the warm-up and the summary |
-| `scripts/check.py` | the assertions over `resolution.json`, `mcpp why --format json` and `CMakeCache.txt` |
-| `scripts/results-table.py` | prints the rows of the results table for a run |
+| `scripts/check.py` | the assertions over `resolution.json`, `mcpp why --format json` and `CMakeCache.txt`, and the reading of a build's download lines |
+| `scripts/results-table.py` | prints the rows of the results and timing tables for a run |
