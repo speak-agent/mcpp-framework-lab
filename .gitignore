@@ -1,0 +1,6 @@
+work/
+target/
+results/
+mcpp.lock
+compile_commands.json
+.mcpp-home/

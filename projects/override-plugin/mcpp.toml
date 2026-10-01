@@ -1,0 +1,19 @@
+# A tiny plugin package that states where a payload comes from. It does so in
+# the wrong place: only the project being built may, so a build that depends on
+# this package is refused.
+[package]
+name        = "override-plugin"
+namespace   = "lab"
+version     = "0.1.0"
+description = "Lab fixture: a package that writes [xlings.overrides]"
+license     = "Apache-2.0"
+authors     = ["speak-agent"]
+
+[build]
+sources = ["src/override_plugin.cppm"]
+
+[xlings.overrides]
+"xim:cmake" = "@CMAKE@"
+
+[targets.override-plugin]
+kind = "lib"

@@ -1,0 +1,26 @@
+# A dependency states [xlings.overrides]; the build is refused.
+[package]
+name        = "lab-override-from-dependency"
+version     = "0.1.0"
+description = "Lab case: override-from-dependency"
+license     = "Apache-2.0"
+authors     = ["speak-agent"]
+
+[language]
+standard   = "c++23"
+modules    = true
+import_std = true
+
+# The placeholder below is the plugins checkout; scripts/lab.sh replaces it when it
+# copies the projects into the working tree.
+[build-dependencies.mcpp]
+plugins = { path = "@PLUGINS@", features = ["deps-cmake"], host-module = true }
+
+[targets.lab-override-from-dependency]
+kind = "bin"
+main = "src/main.cpp"
+
+# The dependency below writes `[xlings.overrides]` in its own manifest. A
+# dependency may not, so this project's build is refused.
+[build-dependencies.lab]
+override-plugin = { path = "../override-plugin", host-module = true }

@@ -1,0 +1,161 @@
+name: lab
+
+# Builds the engine at MCPP_REF with a released mcpp, then runs every case in
+# projects/ with the engine it built, on one job per platform. The references
+# live in refs.env.
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: lab-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The version the engine branch is expected to print. A branch that moves its
+  # version is a change to what this lab validates, so the job fails and says so.
+  EXPECT_MCPP_VERSION: mcpp 2026.10.1.3
+  # deps-cmake keeps a finished installation under a key that names each tool by
+  # its file name and not its path, so a second case would copy the first
+  # case's installation and run no cmake at all. Off, every case configures and
+  # builds the subproject with the cmake whose source it states.
+  MCPP_DEPS_CMAKE_CACHE: "off"
+
+jobs:
+  lab:
+    name: lab (${{ matrix.platform }})
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux x86_64
+            runs-on: ubuntu-24.04
+          - platform: macos arm64
+            runs-on: macos-15
+          - platform: windows x86_64
+            runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    env:
+      LAB_PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read refs.env
+        run: grep -E '^[A-Z_]+=' refs.env >> "$GITHUB_ENV"
+
+      # The home is a directory of the workspace. Its value is in the host's
+      # path syntax, because mcpp hands it to xlings, a native program.
+      - name: Pin MCPP_HOME inside the workspace
+        run: |
+          set -e
+          mkdir -p "$PWD/.mcpp-home"
+          H="$PWD/.mcpp-home"
+          command -v cygpath > /dev/null && H=$(cygpath -m "$H")
+          echo "MCPP_HOME=$H" >> "$GITHUB_ENV"
+
+      - name: Restore the mcpp sandbox
+        id: home
+        uses: actions/cache/restore@v4
+        with:
+          path: .mcpp-home
+          key: lab-home-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.MCPP_BOOTSTRAP }}-${{ hashFiles('refs.env') }}
+          restore-keys: |
+            lab-home-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.MCPP_BOOTSTRAP }}-
+
+      - name: Install the released mcpp ${{ env.MCPP_BOOTSTRAP }}
+        run: bash scripts/install-mcpp.sh
+
+      - name: Clone the plugins at PLUGINS_REF
+        run: bash scripts/clone-plugins.sh
+
+      - name: Build the engine at MCPP_REF with the released mcpp
+        id: engine
+        timeout-minutes: 120
+        run: bash scripts/build-engine.sh
+
+      - name: Record the engine version
+        run: |
+          set -eu
+          version=$("$MCPP" --version | head -1)
+          echo "MCPP=$MCPP"
+          echo "mcpp --version: $version"
+          [ "$version" = "$EXPECT_MCPP_VERSION" ] || {
+            echo "::error::the engine at $MCPP_REF prints '$version', and this lab expects '$EXPECT_MCPP_VERSION'"; exit 1; }
+
+      # Installs what every case needs except the cmake payload, so that the
+      # sandbox saved below holds a toolchain and no xim:cmake. The cases that
+      # set MCPP_NO_AUTO_INSTALL=1 depend on that.
+      - name: Warm up the sandbox
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 60
+        run: bash scripts/lab.sh warmup
+
+      - name: Save the mcpp sandbox
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' && steps.home.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .mcpp-home
+          key: ${{ steps.home.outputs.cache-primary-key }}
+
+      - name: "case: control"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh control
+
+      - name: "case: choice-build-mcpp"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh choice-build-mcpp
+
+      - name: "case: override-env"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh override-env
+
+      - name: "case: override-manifest"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh override-manifest
+
+      - name: "case: override-from-dependency"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh override-from-dependency
+
+      - name: "case: managed-only"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh managed-only
+
+      - name: "case: why"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 30
+        run: bash scripts/lab.sh why
+
+      # Last: the only case that installs the cmake payload.
+      - name: "case: default"
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        timeout-minutes: 60
+        run: bash scripts/lab.sh default
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: bash scripts/lab.sh summary
+
+      - name: Upload the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab-results-${{ runner.os }}
+          path: results
+          if-no-files-found: warn

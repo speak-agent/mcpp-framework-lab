@@ -1,0 +1,14 @@
+import std;
+import mcpp;
+import mcpp.deps.cmake;
+
+int main() {
+    mcpp::deps::cmake::options o;
+    o.source    = "../greet";
+    o.libraries = { "greet" };
+    o.shared    = true;
+    // The build program names the host's cmake. scripts/lab.sh writes the
+    // path it found in place of the placeholder.
+    o.cmake     = "@CMAKE@";
+    return mcpp::deps::cmake::use(o) ? 0 : 1;
+}

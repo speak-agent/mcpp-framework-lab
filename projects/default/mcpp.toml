@@ -1,0 +1,21 @@
+# Nothing states where any tool comes from: every source is the ecosystem's.
+[package]
+name        = "lab-default"
+version     = "0.1.0"
+description = "Lab case: default"
+license     = "Apache-2.0"
+authors     = ["speak-agent"]
+
+[language]
+standard   = "c++23"
+modules    = true
+import_std = true
+
+# The placeholder below is the plugins checkout; scripts/lab.sh replaces it when it
+# copies the projects into the working tree.
+[build-dependencies.mcpp]
+plugins = { path = "@PLUGINS@", features = ["deps-cmake"], host-module = true }
+
+[targets.lab-default]
+kind = "bin"
+main = "src/main.cpp"
