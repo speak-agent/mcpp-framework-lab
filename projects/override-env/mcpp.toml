@@ -1,0 +1,21 @@
+# The same tool stated by MCPP_XLINGS_OVERRIDE_XIM_CMAKE; the manifest and the build program say nothing.
+[package]
+name        = "lab-override-env"
+version     = "0.1.0"
+description = "Lab case: override-env"
+license     = "Apache-2.0"
+authors     = ["speak-agent"]
+
+[language]
+standard   = "c++23"
+modules    = true
+import_std = true
+
+# The placeholder below is the plugins checkout; scripts/lab.sh replaces it when it
+# copies the projects into the working tree.
+[build-dependencies.mcpp]
+plugins = { path = "@PLUGINS@", features = ["deps-cmake"], host-module = true }
+
+[targets.lab-override-env]
+kind = "bin"
+main = "src/main.cpp"
