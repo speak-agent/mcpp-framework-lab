@@ -119,7 +119,7 @@ case_control() {
     cd "$P/override-env"
     mcpp_run MCPP_NO_AUTO_INSTALL=1 -- build
     [ "$rc" -ne 0 ] || fail "a build that states no tool was not refused under MCPP_NO_AUTO_INSTALL=1, so xim:cmake is already installed on this runner and the cases below prove less"
-    contains "$out" "cmake" || fail "the refusal does not name cmake"
+    contains "$out" "xim:cmake" || fail "the refusal does not name xim:cmake"
     contains "$out" "Finished" && fail "the build finished although it was refused"
     pass
 }

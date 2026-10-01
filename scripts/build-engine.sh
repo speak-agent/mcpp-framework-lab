@@ -22,16 +22,19 @@ rm -f "$src/.xlings.json"
 
 (cd "$src" && "$MCPP_BOOTSTRAP_BIN" build --profile release)
 
+# On Windows the shell opens `bin/mcpp` as `bin/mcpp.exe`, so a glob over both
+# names finds one file twice; the plain name is skipped when the `.exe` exists.
 built=""
 count=0
-for f in "$src"/target/*/*/bin/mcpp "$src"/target/*/*/bin/mcpp.exe; do
+for f in "$src"/target/*/*/bin/mcpp.exe "$src"/target/*/*/bin/mcpp; do
     [ -f "$f" ] || continue
+    case "$f" in *.exe) ;; *) [ -f "$f.exe" ] && continue ;; esac
     built=$f
     count=$((count + 1))
 done
 if [ "$count" != 1 ]; then
     echo "::error::expected one mcpp binary under target/*/*/bin, found $count"
-    find "$src/target" -name 'mcpp*' -type f | head -20
+    find "$src/target" -path '*/bin/*' -type f 2> /dev/null | head -20 || true
     exit 1
 fi
 version=$("$built" --version | head -1)
