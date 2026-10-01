@@ -51,16 +51,16 @@ def main():
     print()
     print("\n".join(rows))
     print()
-    print("| Platform | Runner image | Host cmake | Payload | State | Control (s) | Named before (s) | Named after (s) | Control minus named mean (s) | Payload download (MB, s) | All payloads of the control (MB, s) | Installed (MB) |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| Platform | Runner image | Host cmake | Payload | State | Control (s) | Named before (s) | Named after (s) | Control minus named mean (s) | Control, payload installed (s) | Payload download (MB, s) | All payloads of the control (MB, s) | Installed (MB) |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for os_name, runner in PLATFORMS:
         t = dest / ("lab-results-" + os_name) / "timing.tsv"
         if not t.exists():
-            print("| %s | not measured |||||||||||" % runner)
+            print("| %s | not measured ||||||||||||" % runner)
             continue
         f = t.read_text(encoding="utf-8").rstrip("\n").split("\t")
-        print("| %s | %s | %s | xim:cmake %s | %s | %s | %s | %s | %s | %s, %s | %s, %s | %s |" % (
-            runner, f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9], f[10], f[11], f[12], f[13]))
+        print("| %s | %s | %s | xim:cmake %s | %s | %s | %s | %s | %s | %s | %s, %s | %s, %s | %s |" % (
+            runner, f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[14], f[9], f[10], f[11], f[12], f[13]))
 
 
 if __name__ == "__main__":

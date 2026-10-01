@@ -341,12 +341,15 @@ case_why() {
 # xim:cmake payload. Three whole `mcpp build`s, each from a clean state (the
 # project's target/ removed):
 #
-#   named before   the build program names the host cmake
-#   control        nothing names cmake, so the member asks for the payload
-#   named after    the named build again
+#   named before          the build program names the host cmake
+#   control               nothing names cmake, so the member asks for the payload
+#   named after           the named build again
+#   control, installed    the control again, now that the payload is installed
 #
 # The named build runs on both sides of the control so that the order of the
-# builds is visible in the numbers instead of hiding in them. This case runs
+# builds is visible in the numbers instead of hiding in them. The last build
+# separates what installing the payload costs from what the control project
+# costs: the control with the payload already installed provisions nothing. This case runs
 # after every case that needs the payload to be absent, and before `default`.
 #
 # THE MEASUREMENT IS COLD OR IT IS LABELLED WARM. It is cold when the payload
@@ -405,15 +408,22 @@ case_timing() {
     [ "$rc" -eq 0 ] || fail "the second build that names the host cmake did not succeed"
     contains "$out" "Downloading xim:" && fail "the second build that names the host cmake downloaded a payload"
 
+    cd "$control_dir"; rm -rf target
+    echo "== control again, with the payload installed"
+    t0=$(now); mcpp_run -- build; t1=$(now); local control_installed; control_installed=$(elapsed "$t0" "$t1")
+    [ "$rc" -eq 0 ] || fail "the control build with the payload installed did not succeed"
+    contains "$out" "Downloading xim:" && fail "the control build downloaded a payload although it was installed"
+
     local named; named=$(awk -v a="$named_before" -v b="$named_after" 'BEGIN { printf "%.1f", (a + b) / 2 }')
     local saved; saved=$(awk -v c="$control" -v n="$named" 'BEGIN { printf "%.1f", c - n }')
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "${LAB_PLATFORM:-$(uname -s)}" "${ImageOS:-unknown} ${ImageVersion:-unknown}" \
         "$("$CMAKE" --version | head -1 | sed 's/cmake version //')" "${cmake_version:-none}" "$before" \
         "$control" "$named_before" "$named_after" "$saved" \
-        "${cmake_mb:-0}" "${cmake_s:-0}" "$all_mb" "$all_s" "${installed_mb:-0}" > "$LAB_RESULTS/timing.tsv"
+        "${cmake_mb:-0}" "${cmake_s:-0}" "$all_mb" "$all_s" "${installed_mb:-0}" "$control_installed" > "$LAB_RESULTS/timing.tsv"
     echo "TIMING state: $before"
     echo "TIMING control ${control}s; named ${named_before}s before and ${named_after}s after (mean ${named}s); the control took ${saved}s longer"
+    echo "TIMING control with the payload installed ${control_installed}s"
     echo "TIMING xim:cmake download: ${cmake_mb:-none} MB in ${cmake_s:-none}s; all $n payloads of the control: ${all_mb} MB in ${all_s}s; installed size ${installed_mb:-?} MB"
     pass
 }
@@ -478,7 +488,7 @@ summary() {
     if [ -f "$LAB_RESULTS/timing.tsv" ]; then
         awk -F'\t' '{
             print ""
-            print "Timing (" $5 "): control " $6 " s, named " $7 " s before and " $8 " s after, difference " $9 " s;"
+            print "Timing (" $5 "): control " $6 " s, named " $7 " s before and " $8 " s after, difference " $9 " s, control with the payload installed " $15 " s;"
             print "xim:cmake " $4 ", " $10 " MB downloaded in " $11 " s, " $14 " MB installed."
         }' "$LAB_RESULTS/timing.tsv" >> "$md"
     fi
